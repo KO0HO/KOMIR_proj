@@ -146,10 +146,11 @@ def plot_volatility(df, save_path: Optional[Path] = None):
     plt.close()
 
 
-def plot_all_results(df, save_dir: Optional[Path] = None):
+def plot_all_results(df, save_dir: Optional[Path] = None, timestamp: Optional[str] = None):
     if save_dir is not None:
         save_dir.mkdir(parents=True, exist_ok=True)
-    plot_index_with_bands(df, save_dir / "plot_index_with_bands.png" if save_dir is not None else None)
-    plot_anomaly_grade(df, save_dir / "plot_anomaly_grade.png" if save_dir is not None else None)
-    plot_return_rate(df, save_dir / "plot_return_rate.png" if save_dir is not None else None)
-    plot_volatility(df, save_dir / "plot_volatility.png" if save_dir is not None else None)
+    suffix = f"_{timestamp}" if timestamp else ""
+    plot_index_with_bands(df, save_dir / f"plot_index_with_bands{suffix}.png" if save_dir is not None else None)
+    plot_anomaly_grade(df, save_dir / f"plot_anomaly_grade{suffix}.png" if save_dir is not None else None)
+    plot_return_rate(df, save_dir / f"plot_return_rate{suffix}.png" if save_dir is not None else None)
+    plot_volatility(df, save_dir / f"plot_volatility{suffix}.png" if save_dir is not None else None)

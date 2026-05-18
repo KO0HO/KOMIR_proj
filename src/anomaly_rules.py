@@ -6,9 +6,12 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
 from .config import (
+    BOLLINGER_MARGIN,
     CONTAMINATION_RATE,
     DISPARITY_LOWER_THRESHOLD,
     DISPARITY_UPPER_THRESHOLD,
+    MA20_COL,
+    MA_DISPARITY_MARGIN,
     BOLLINGER_LOWER_COL,
     BOLLINGER_UPPER_COL,
     DATE_COL,
@@ -17,6 +20,7 @@ from .config import (
     MACD_COL,
     RETURN_COL,
     RSI_COL,
+    RSI_RETURN_ZSCORE_THRESHOLD,
     SIGNAL_COL,
     STD_COL,
     Z_THRESHOLD,
@@ -27,11 +31,11 @@ from .config import (
 
 
 def _assign_anomaly_grade(score: float) -> str:
-    if score == 0:
+    if score <= 1:
         return "정상"
     elif score <= 2:
         return "주의"
-    elif score <= 4:
+    elif score <= 3:
         return "경계"
     return "심각"
 
@@ -74,16 +78,28 @@ def apply_anomaly_detection(df_model: pd.DataFrame) -> pd.DataFrame:
         df["return_zscore"] = (df[RETURN_COL] - return_mean) / return_std
         df["flag_return_zscore"] = (df["return_zscore"].abs() >= Z_THRESHOLD).astype(int)
 
+    if MA20_COL in df.columns and INDEX_COL in df.columns:
+        df["ma20_gap_ratio"] = (df[INDEX_COL] - df[MA20_COL]).abs() / df[MA20_COL]
+    else:
+        df["ma20_gap_ratio"] = 0.0
+
     if DISPARITY_COL in df.columns:
         df["flag_disparity"] = (
-            (df[DISPARITY_COL] >= DISPARITY_UPPER_THRESHOLD) |
-            (df[DISPARITY_COL] <= DISPARITY_LOWER_THRESHOLD)
+            (
+                (df[DISPARITY_COL] >= DISPARITY_UPPER_THRESHOLD) |
+                (df[DISPARITY_COL] <= DISPARITY_LOWER_THRESHOLD)
+            ) &
+            (df["ma20_gap_ratio"] >= MA_DISPARITY_MARGIN)
         ).astype(int)
 
     if all(col in df.columns for col in [INDEX_COL, BOLLINGER_UPPER_COL]):
-        df["flag_bollinger_upper"] = (df[INDEX_COL] > df[BOLLINGER_UPPER_COL]).astype(int)
+        df["flag_bollinger_upper"] = (
+            df[INDEX_COL] > (1 + BOLLINGER_MARGIN) * df[BOLLINGER_UPPER_COL]
+        ).astype(int)
     if all(col in df.columns for col in [INDEX_COL, BOLLINGER_LOWER_COL]):
-        df["flag_bollinger_lower"] = (df[INDEX_COL] < df[BOLLINGER_LOWER_COL]).astype(int)
+        df["flag_bollinger_lower"] = (
+            df[INDEX_COL] < (1 - BOLLINGER_MARGIN) * df[BOLLINGER_LOWER_COL]
+        ).astype(int)
     df["flag_bollinger"] = (
         (df.get("flag_bollinger_upper", 0) == 1) |
         (df.get("flag_bollinger_lower", 0) == 1)
@@ -96,8 +112,18 @@ def apply_anomaly_detection(df_model: pd.DataFrame) -> pd.DataFrame:
         df["flag_volatility"] = (df["volatility_zscore"] >= VOLATILITY_Z_THRESHOLD).astype(int)
 
     if RSI_COL in df.columns:
-        df["flag_rsi_overbought"] = (df[RSI_COL] >= RSI_OVERBOUGHT).astype(int)
-        df["flag_rsi_oversold"] = (df[RSI_COL] <= RSI_OVERSOLD).astype(int)
+        if RETURN_COL in df.columns:
+            df["flag_rsi_overbought"] = (
+                (df[RSI_COL] >= RSI_OVERBOUGHT) &
+                (df["return_zscore"] >= RSI_RETURN_ZSCORE_THRESHOLD)
+            ).astype(int)
+            df["flag_rsi_oversold"] = (
+                (df[RSI_COL] <= RSI_OVERSOLD) &
+                (df["return_zscore"] <= -RSI_RETURN_ZSCORE_THRESHOLD)
+            ).astype(int)
+        else:
+            df["flag_rsi_overbought"] = (df[RSI_COL] >= RSI_OVERBOUGHT).astype(int)
+            df["flag_rsi_oversold"] = (df[RSI_COL] <= RSI_OVERSOLD).astype(int)
         df["flag_rsi"] = ((df["flag_rsi_overbought"] == 1) | (df["flag_rsi_oversold"] == 1)).astype(int)
 
     if all(col in df.columns for col in [MACD_COL, SIGNAL_COL]):

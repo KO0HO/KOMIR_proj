@@ -19,7 +19,7 @@ def main() -> None:
     print(f"- saved full result: {paths['full']}")
     print(f"- saved anomaly list: {paths['list']}")
 
-    plot_all_results(df_model, save_dir=RESULT_DIR)
+    plot_all_results(df_model, save_dir=RESULT_DIR, timestamp=paths["timestamp"])
     print(f"- saved plot files in: {RESULT_DIR}")
 
 
